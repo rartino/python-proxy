@@ -59,7 +59,7 @@ def schedule(rserver, salgorithm, host_name, port):
     else:
         raise Exception('Unknown scheduling algorithm') #Unreachable
 
-async def stream_handler(reader, writer, unix, lbind, protos, rserver, cipher, sslserver, debug=0, authtime=86400*30, block=None, salgorithm='fa', verbose=DUMMY, modstat=lambda u,r,h:lambda i:DUMMY, **kwargs):
+async def stream_handler(reader, writer, unix, lbind, protos, rserver, cipher, sslserver, debug=0, authtime=86400*30, block=None, map_local=None, salgorithm='fa', verbose=DUMMY, modstat=lambda u,r,h:lambda i:DUMMY, **kwargs):
     try:
         reader, writer = proto.sslwrap(reader, writer, sslserver, True, None, verbose)
         if unix:
@@ -80,6 +80,8 @@ async def stream_handler(reader, writer, unix, lbind, protos, rserver, cipher, s
             raise Exception('BLOCK ' + host_name)
         else:
             roption = schedule(rserver, salgorithm, host_name, port) or DIRECT
+            if map_local and map_local(host_name):
+                host_name = 'localhost'
             verbose(f'{lproto.name} {remote_text}{roption.logtext(host_name, port)}')
             try:
                 reader_remote, writer_remote = await roption.open_connection(host_name, port, local_addr, lbind)
@@ -117,6 +119,8 @@ async def datagram_handler(writer, data, addr, protos, urserver, block, cipher, 
             raise Exception('BLOCK ' + host_name)
         else:
             roption = schedule(urserver, salgorithm, host_name, port) or DIRECT
+            if map_local and map_local(host_name):
+                host_name = 'localhost'
             verbose(f'UDP {lproto.name} {remote_text}{roption.logtext(host_name, port)}')
             data = roption.udp_prepare_connection(host_name, port, data)
             def reply(rdata):
@@ -909,6 +913,7 @@ def main(args = None):
     parser.add_argument('--sys', action='store_true', help='change system proxy setting (mac, windows)')
     parser.add_argument('--reuse', dest='ruport', action='store_true', help='set SO_REUSEPORT (Linux only)')
     parser.add_argument('--daemon', dest='daemon', action='store_true', help='run as a daemon (Linux only)')
+    parser.add_argument('--map-local', dest='map_local', type=compile_rule, help='regex rules for hostnames to be mapped to localhost')
     parser.add_argument('--test', help='test this url for all remote proxies and exit')
     parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
     args = parser.parse_args(args)
